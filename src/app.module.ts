@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
+import { UserModule } from './user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Joi from 'joi';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -21,7 +22,8 @@ import { MongooseModule } from '@nestjs/mongoose';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({uri: config.get('MONGO_URI')}),
     }),
-    HealthModule
+    HealthModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
