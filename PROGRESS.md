@@ -35,22 +35,32 @@ refuse the default when `NODE_ENV=production`.
 - [x] Register `UserModule` in `app.module.ts`
 - [x] Verified: `POST /users` twice → same `_id`; snake_case timestamps in `db.users.find()`
 
-### B. OTP login → JWT ← now
+### B. OTP login → JWT ✅
 
-- [ ] `JWT_SECRET`, `JWT_EXPIRES_IN`, `DEFAULT_OTP_CODE` in `.env` + Joi
-- [ ] DTOs (`@IsPhoneNumber`) + `ValidationPipe({ whitelist: true })` in main.ts
-- [ ] `POST /auth/otp` — stub now, Telegram later
-- [ ] `POST /auth/login` — verify code vs config → find-or-create user → sign JWT
-- [ ] `AuthModule` imports `UsersModule` — auth talks to `UsersService`, never the model directly
-- [ ] `JwtModule.registerAsync` (same pattern as Mongoose)
-- [ ] Verify: curl login → paste token into jwt.io; user row created in Mongo
+- [x] `JWT_SECRET`, `JWT_EXPIRES_IN`, `DEFAULT_OTP_CODE` in `.env` + Joi
+- [x] `LoginDto` + `ValidationPipe({ whitelist: true })` in main.ts (**before** `app.listen`)
+- [x] `POST /auth/otp` — stub now, Telegram later
+- [x] `POST /auth/login` — verify code vs config → find-or-create user → sign JWT
+- [x] `AuthModule` imports `UserModule` — auth talks to `UserService`, never the model directly
+- [x] `JwtModule.registerAsync` (same pattern as Mongoose)
+- [x] Verified: valid code → token; wrong code → 401; missing field → 400
 
-### C. AuthGuard + `/me` ⭐ Phase 0 done
+### C. AuthGuard + `/me` ✅
 
-- [ ] `@Public()` decorator (`SetMetadata`)
-- [ ] `auth.guard.ts` implements `CanActivate` → sets `request.user`
-- [ ] Register globally as `APP_GUARD` (secure by default, opt out with `@Public`)
-- [ ] Verify: `/me` → 401 without token, user with token
+- [x] `@Public()` decorator (`SetMetadata`) in `common/decorators`
+- [x] `auth.guard.ts` implements `CanActivate` → reads token, verifies with `JWT_SECRET`, sets `request.user`
+- [x] Registered globally as `APP_GUARD` **in `AuthModule`** (where `JwtService` lives, so DI resolves — not `AppModule`)
+- [x] `GET /users/me` reads `req['user'].sub` → `find_by_id`
+- [x] Verified: `/users/me` → 401 without token, user doc with token; `@Public()` on auth routes
+
+### Swagger docs ✅
+
+- [x] `@nestjs/swagger` — UI at `/api/docs`
+- [x] Protected with `express-basic-auth` (`admin` / `DOCS_PASSWORD`) — gate mounted **before** `SwaggerModule.setup`, same path `/api/docs`
+- [x] Verified: no auth → 401, `admin:password` → 200, wrong → 401
+- ⚠️ Hardening (Phase 3): boot must fail if `DOCS_PASSWORD` missing (drop the `?? 'changeme'` fallback)
+
+**🎉 Phase 0 complete** — a phone can register, log in, and hit authenticated `/users/me`.
 
 ### D. RBAC
 
@@ -64,6 +74,18 @@ refuse the default when `NODE_ENV=production`.
 - [ ] Monorepo split — deferred until right before Bull queues
 
 Deferred on purpose: refresh tokens (wisdom has none), ownership checks (Phase 1, with Video).
+
+## Theory
+
+Homework doc: [THEORY.md](THEORY.md) — TS-vs-Dart, promises, decorators/metadata, DI & modules,
+request lifecycle, Mongoose, HTTP codes, config, JWT.
+
+- Read §1–§3 ✅ (quizzed; §3.2 was the miss — `emitDecoratorMetadata` off = app won't boot, not an IDE nag)
+- **Next: §4 (DI & modules), then §5 (request lifecycle) before writing the AuthGuard.**
+- `await` is structural: it takes anything with `.then()`. Mongoose `Query` is *not* a `Promise`
+  subclass — unrelated class, same shape. Dart's `await` is nominal and requires a real `Future`.
+
+Daily startup: `colima start && docker-compose up -d` then `npm run start:dev`.
 
 ## Learned
 
@@ -80,4 +102,7 @@ Deferred on purpose: refresh tokens (wisdom has none), ownership checks (Phase 1
 - `phone!: string` — definite assignment assertion. Mongoose hydrates the class at runtime, so TS can't see the assignment (ts2564).
 - Forgetting `await` on `findOne()` gives a truthy `Query` object, not a document — so `if (!user)` never fires. Same trap as holding a Dart `Future` instead of its value.
 - Infra sanity-check: an impossible error (auth required on a no-auth DB) means you're talking to a different server. `lsof -nP -iTCP:<port> -sTCP:LISTEN` before debugging code. Colima doesn't survive reboots; a brew `mongod` owns 27017, so our container maps `27018:27017`.
+- TS has no named arguments — `new Foo(message: 'x')` is Dart reflex and a syntax error. Pass positionally, or an object literal.
+- Config in `main.ts` (`useGlobalPipes`) must come **before** `app.listen()`.
+- `expiresIn` wants a template-literal type (`'7d'`), not plain `string` — assert with `as SignOptions['expiresIn']` rather than hardcoding.
 - AuthN (401, *who are you*) vs AuthZ (403, *are you allowed*). JWT is **signed, not encrypted** — payload is public, never put secrets in it. Roles don't check ownership; the service must.

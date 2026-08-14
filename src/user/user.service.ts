@@ -23,4 +23,8 @@ export class UserService {
 
     return this.user_model.create({ phone })
   }
+
+  async find_by_id(id: string) {
+    return this.user_model.findById(id)
+  }
 }
