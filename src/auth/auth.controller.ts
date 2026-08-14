@@ -15,6 +15,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Public()
   async login(@Body() dto: LoginDto) {
     return await this.auth_service.login(dto.phone, dto.code)
   }

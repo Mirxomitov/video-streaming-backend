@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
+import { VideoModule } from './video/video.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Joi from 'joi';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -30,6 +31,7 @@ import { AuthGuard } from './common/guards/auth.guard';
     HealthModule,
     UserModule,
     AuthModule,
+    VideoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

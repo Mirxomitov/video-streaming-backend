@@ -87,6 +87,30 @@ request lifecycle, Mongoose, HTTP codes, config, JWT.
 
 Daily startup: `colima start && docker-compose up -d` then `npm run start:dev`.
 
+## Phase 1 — Core loop: upload → transcode → play
+
+Decision: **managed transcoding first** (Mux/Cloudflare Stream) to ship the full slice, then own
+ffmpeg later (roadmap key decision; satisfies "wrote every piece" at step 2).
+
+### A. Video model ✅
+
+- [x] `video/enums/video-status.enum.ts` — `uploading → processing → ready → failed`
+- [x] `video/video.schema.ts` — `title` (req), `description?`, `status` (enum, default uploading),
+      `owner_id` (ObjectId **ref: 'User'**), `hls_url?`, `thumbnail_url?`, `duration?`, snake_case ts
+- [x] `video.service.ts` — `create`, `find_ready` (filters `status: READY`), `find_by_id`
+- [x] `video.controller.ts` — `POST /videos` (owner from `req.user.sub`, **not** the body),
+      `GET /videos` (ready only); `CreateVideoDto` = only `title`/`description`
+- [x] Registered `VideoModule` in `app.module.ts`
+- [x] **e2e test** (`test/video.e2e-spec.ts`): 401 without token; creates with status uploading +
+      owner_id; GET hides non-ready. Test caught real bug → `@Public()` was missing on `/auth/login`.
+
+### Next — Upload (managed)
+- [ ] Choose Mux vs Cloudflare Stream, create account + creds in `.env` + Joi
+- [ ] Direct-upload endpoint (client uploads to the service, not through Node)
+- [ ] Bull queue: react to "upload complete" (first real queue)
+- [ ] Webhook handler: on `ready` → save playback URL, flip `status`
+- [ ] `GET /videos/:id/playback` → returns the HLS URL
+
 ## Learned
 
 - Module = feature package; `imports` = other modules, `controllers`/`providers` = what this module owns.
