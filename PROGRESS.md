@@ -104,7 +104,26 @@ ffmpeg later (roadmap key decision; satisfies "wrote every piece" at step 2).
 - [x] **e2e test** (`test/video.e2e-spec.ts`): 401 without token; creates with status uploading +
       owner_id; GET hides non-ready. Test caught real bug → `@Public()` was missing on `/auth/login`.
 
+### Review nits (from mentor pass 2026-08-21)
+
+- [ ] Decide: is `GET /videos` (feed) public? Currently guard-protected → add `@Public()` if browsing shouldn't need login
+- [ ] `video.schema.ts`: reuse `COLLECTION_TIMESTAMPS` + `MongooseDocument<Video>` (not inline/`HydratedDocument`); add explicit `collection: 'videos'`
+- [ ] Remove dead `AuthGuard` import in `app.module.ts` (it's registered in `AuthModule`)
+
+### Bull queues (stub transcode job)
+
+- [x] `@nestjs/bull` + `bull`; `REDIS_HOST`/`REDIS_PORT` in `.env` + Joi
+- [x] `BullModule.forRootAsync` (app.module) = Redis connection, config-driven (like Mongoose `forRootAsync`)
+- [x] `BullModule.registerQueue({ name: 'video-transcode' })` in VideoModule (like Mongoose `forFeature`)
+- [x] Producer: `VideoService` injects `@InjectQueue`, adds `{ video_id }` job on create — verified in container redis
+- [ ] Consumer: `@Processor('video-transcode')` flips `uploading → processing → ready` ← **now**
+- [ ] Verify: POST /videos → status ends `ready`; job leaves `:wait`
+
+Redis conflict: brew `redis-server` owns 6379 (auto-starts, like `mongod`) → container remapped `6380:6379`.
+`import type { Queue } from 'bull'` — type-only import required under `isolatedModules` + decorated params.
+
 ### Next — Upload (managed)
+
 - [ ] Choose Mux vs Cloudflare Stream, create account + creds in `.env` + Joi
 - [ ] Direct-upload endpoint (client uploads to the service, not through Node)
 - [ ] Bull queue: react to "upload complete" (first real queue)
