@@ -35,41 +35,57 @@ describe('Videos (e2e)', () => {
     await app.close()
   })
 
-  it('rejects POST /videos without a token (guard works)', () => {
+  it('rejects POST /videos/upload without a token (guard works)', () => {
     return request(app.getHttpServer())
-      .post('/videos')
+      .post('/videos/upload')
       .send({ title: 'no auth' })
       .expect(401)
   })
 
-  it('creates a video owned by the token holder, status uploading', async () => {
+  it('creates a direct storage upload owned by the token holder', async () => {
     const res = await request(app.getHttpServer())
-      .post('/videos')
+      .post('/videos/upload')
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'my first video' })
       .expect(201)
 
-    expect(res.body.title).toBe('my first video')
-    expect(res.body.status).toBe('uploading') // enum default kicked in
-    expect(res.body.owner_id).toBeDefined() // came from the verified token, not the body
+    expect(res.body.video_id).toBeDefined()
+    expect(res.body.upload_url).toContain('X-Amz-Signature')
   })
 
-  it('GET /videos returns only ready videos (the fresh one is hidden)', async () => {
+  it('queues processing only after the owner completes the upload', async () => {
     const create = await request(app.getHttpServer())
-      .post('/videos')
+      .post('/videos/upload')
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'still uploading' })
+      .send({ title: 'ready after ffmpeg' })
       .expect(201)
 
-    const list = await request(app.getHttpServer())
-      .get('/videos')
+    const complete = await request(app.getHttpServer())
+      .post(`/videos/${create.body.video_id}/complete`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(202)
+
+    expect(complete.body).toEqual({
+      video_id: create.body.video_id,
+      status: 'processing',
+    })
+  })
+
+  it('returns a bounded cursor page of ready videos', async () => {
+    const page = await request(app.getHttpServer())
+      .get('/videos?limit=1')
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
 
-    // Every returned video must be ready...
-    expect(list.body.every((v: { status: string }) => v.status === 'ready')).toBe(true)
-    // ...so the uploading one we just made must NOT appear.
-    const ids = list.body.map((v: { _id: string }) => v._id)
-    expect(ids).not.toContain(create.body._id)
+    expect(Array.isArray(page.body.items)).toBe(true)
+    expect(page.body).toHaveProperty('next_cursor')
+    expect(page.body.items.length).toBeLessThanOrEqual(1)
+  })
+
+  it('rejects an unsafe page size', () => {
+    return request(app.getHttpServer())
+      .get('/videos?limit=51')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(400)
   })
 })

@@ -2,18 +2,20 @@ import { Module } from '@nestjs/common'
 import { MongooseModule } from '@nestjs/mongoose'
 
 import { VideoController } from './video.controller'
-import { MuxWebhookController } from './mux-webhook.controller'
 import { Video, VideoSchema } from './video.schema'
 import { VideoService } from './video.service'
-import { MuxModule } from '../mux/mux.module'
+import { BullModule } from '@nestjs/bull'
+import { StorageModule } from '../storage/storage.module'
+import { VideoProcessor } from './video.processor'
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Video.name, schema: VideoSchema }]),
-    MuxModule,
+    BullModule.registerQueue({ name: 'video-transcode' }),
+    StorageModule,
   ],
-  controllers: [VideoController, MuxWebhookController],
-  providers: [VideoService],
+  controllers: [VideoController],
+  providers: [VideoService, VideoProcessor],
   exports: [VideoService],
 })
 export class VideoModule {}

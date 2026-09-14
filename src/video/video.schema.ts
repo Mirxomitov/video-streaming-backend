@@ -6,6 +6,9 @@ export type VideoDocument = HydratedDocument<Video>
 
 @Schema({ timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } })
 export class Video {
+  created_at!: Date
+  updated_at!: Date
+
   @Prop({required: true})
   title!: string
 
@@ -37,16 +40,11 @@ export class Video {
   @Prop({required: false})
   duration?: number
 
-  // Mux identifiers — the chain: upload → asset → playback
-  // upload_id is set now (at upload); asset/playback are filled by the webhook later.
-  @Prop({ required: false })
-  mux_upload_id?: string
+  @Prop({ required: true })
+  source_key!: string
 
   @Prop({ required: false })
-  mux_asset_id?: string
-
-  @Prop({ required: false })
-  mux_playback_id?: string
+  output_prefix?: string
 }
 
 export const VideoSchema = SchemaFactory.createForClass(Video)
