@@ -8,7 +8,6 @@ import { VideoModule } from './video/video.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Joi from 'joi';
 import { MongooseModule } from '@nestjs/mongoose';
-import { BullModule } from '@nestjs/bull'
 
 
 @Module({
@@ -21,8 +20,6 @@ import { BullModule } from '@nestjs/bull'
         JWT_SECRET: Joi.string().required(),
         JWT_EXPIRES_IN: Joi.string().required(),
         DEFAULT_OTP_CODE: Joi.string().required(),
-        REDIS_HOST: Joi.string().required(),
-        REDIS_PORT: Joi.number().required(),
         MUX_TOKEN_ID: Joi.string().required(),
         MUX_TOKEN_SECRET: Joi.string().required(),
         MUX_WEBHOOK_SECRET: Joi.string().allow('').optional(),
@@ -34,11 +31,6 @@ import { BullModule } from '@nestjs/bull'
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({uri: config.get('MONGO_URI')}),
     }), 
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({redis: {host: config.get('REDIS_HOST'), port: config.get('REDIS_PORT')}}),
-    }),
     HealthModule,
     UserModule,
     AuthModule,

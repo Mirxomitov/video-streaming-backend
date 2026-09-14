@@ -8,12 +8,6 @@ import { CreateVideoDto } from './dto/create-video.dto'
 export class VideoController {
   constructor(private readonly video_service: VideoService) {}
 
-  @Post()
-  create(@Body() dto: CreateVideoDto, @Req() req: Request) {
-    const owner_id = req['user'].sub // the guard put this here
-    return this.video_service.create(owner_id, dto.title, dto.description)
-  }
-
   // The real upload flow: returns a Mux URL the client PUTs the file to.
   @Post('upload')
   createUpload(@Body() dto: CreateVideoDto, @Req() req: Request) {
