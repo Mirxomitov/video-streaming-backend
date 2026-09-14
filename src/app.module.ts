@@ -23,6 +23,9 @@ import { BullModule } from '@nestjs/bull'
         DEFAULT_OTP_CODE: Joi.string().required(),
         REDIS_HOST: Joi.string().required(),
         REDIS_PORT: Joi.number().required(),
+        MUX_TOKEN_ID: Joi.string().required(),
+        MUX_TOKEN_SECRET: Joi.string().required(),
+        MUX_WEBHOOK_SECRET: Joi.string().allow('').optional(),
       }),
     }), 
     

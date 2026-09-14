@@ -6,7 +6,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import basicAuth from 'express-basic-auth'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: keep the original request bytes (needed to verify webhook signatures —
+  // a re-serialized JSON object won't byte-match what Mux signed).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
 
   const config = new DocumentBuilder()

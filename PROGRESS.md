@@ -122,13 +122,28 @@ ffmpeg later (roadmap key decision; satisfies "wrote every piece" at step 2).
 Redis conflict: brew `redis-server` owns 6379 (auto-starts, like `mongod`) → container remapped `6380:6379`.
 `import type { Queue } from 'bull'` — type-only import required under `isolatedModules` + decorated params.
 
-### Next — Upload (managed)
+### Upload + transcode (Mux) ✅ — full loop proven end-to-end
 
-- [ ] Choose Mux vs Cloudflare Stream, create account + creds in `.env` + Joi
-- [ ] Direct-upload endpoint (client uploads to the service, not through Node)
-- [ ] Bull queue: react to "upload complete" (first real queue)
-- [ ] Webhook handler: on `ready` → save playback URL, flip `status`
-- [ ] `GET /videos/:id/playback` → returns the HLS URL
+Chose **Mux** (easier than Cloudflare Stream for learning). "Stripe for video."
+
+- [x] `@mux/mux-node` SDK; `MUX_TOKEN_ID`/`MUX_TOKEN_SECRET` in `.env` + Joi (required),
+      `MUX_WEBHOOK_SECRET` optional (Mux gives it only when you create the webhook)
+- [x] `mux/mux.service.ts` — **vendor isolation**: all Mux calls behind one service, so the
+      future own-ffmpeg swap touches only this file. `create_direct_upload()`, `verify_and_parse_webhook()`
+- [x] Schema: `mux_upload_id` / `mux_asset_id` / `mux_playback_id` (the upload→asset→playback chain)
+- [x] `POST /videos/upload` → Mux direct-upload URL; client PUTs file **straight to Mux** (valet handoff)
+- [x] `POST /webhooks/mux` (`@Public`, signature-verified) — inbound async, mirror of the Bull job
+- [x] `rawBody: true` in main.ts — signature needs the original bytes (re-serialized JSON won't match)
+- [x] On `video.asset.ready` → save playback id + `hls_url`, flip `status: ready`;
+      on `video.asset.errored` → `failed`
+- [x] **Proven live:** upload sample.mp4 → Mux transcoded → webhook 200 (×4, verified) →
+      status ready → HLS manifest has 720p + 480p renditions (adaptive!). ngrok tunnel for local webhooks.
+
+### Cleanup / next
+- [ ] Retire the old `POST /videos` + Bull stub processor (Mux does transcoding now)
+- [ ] Optional `GET /videos/:id/playback` (feed already carries `hls_url`)
+- [ ] ⚠️ ngrok-free URL changes each restart → update webhook URL in Mux dashboard
+- [ ] Flutter client (Codex, see `../videostream-mobile/CODEX_PROMPT.md`): login → feed → player → upload
 
 ## Learned
 
