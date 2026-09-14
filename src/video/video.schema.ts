@@ -40,6 +40,18 @@ export class Video {
   @Prop({required: false})
   duration?: number
 
+  @Prop({ required: false, trim: true, index: true })
+  category?: string
+
+  @Prop({ type: [String], default: [], index: true })
+  tags!: string[]
+
+  @Prop({ default: 0 })
+  likes_count!: number
+
+  @Prop({ default: 0 })
+  views_count!: number
+
   @Prop({ required: true })
   source_key!: string
 

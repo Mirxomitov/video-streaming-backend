@@ -89,20 +89,19 @@ Daily startup: `colima start && docker-compose up -d` then `npm run start:dev`.
 
 ## Phase 1 — Core loop: upload → transcode → play
 
-Decision: **managed transcoding first** (Mux/Cloudflare Stream) to ship the full slice, then own
-ffmpeg later (roadmap key decision; satisfies "wrote every piece" at step 2).
+Decision: own the Phase 1 pipeline with S3-compatible storage, Bull, Redis, and ffmpeg.
 
 ### A. Video model ✅
 
 - [x] `video/enums/video-status.enum.ts` — `uploading → processing → ready → failed`
 - [x] `video/video.schema.ts` — `title` (req), `description?`, `status` (enum, default uploading),
       `owner_id` (ObjectId **ref: 'User'**), `hls_url?`, `thumbnail_url?`, `duration?`, snake_case ts
-- [x] `video.service.ts` — `create`, `find_ready` (filters `status: READY`), `find_by_id`
-- [x] `video.controller.ts` — `POST /videos` (owner from `req.user.sub`, **not** the body),
-      `GET /videos` (ready only); `CreateVideoDto` = only `title`/`description`
+- [x] `video.service.ts` — direct upload creation, upload completion, ready-feed pagination, `find_by_id`
+- [x] `video.controller.ts` — `POST /videos/upload`, `POST /videos/:id/complete`,
+      `GET /videos?limit=20&before=<cursor>`; owner comes from `req.user.sub`
 - [x] Registered `VideoModule` in `app.module.ts`
-- [x] **e2e test** (`test/video.e2e-spec.ts`): 401 without token; creates with status uploading +
-      owner_id; GET hides non-ready. Test caught real bug → `@Public()` was missing on `/auth/login`.
+- [x] **e2e test** (`test/video.e2e-spec.ts`): auth, presigned upload creation, completion queueing,
+      bounded pagination, and invalid page-size rejection.
 
 ### Review nits (from mentor pass 2026-08-21)
 
@@ -110,40 +109,57 @@ ffmpeg later (roadmap key decision; satisfies "wrote every piece" at step 2).
 - [ ] `video.schema.ts`: reuse `COLLECTION_TIMESTAMPS` + `MongooseDocument<Video>` (not inline/`HydratedDocument`); add explicit `collection: 'videos'`
 - [ ] Remove dead `AuthGuard` import in `app.module.ts` (it's registered in `AuthModule`)
 
-### Bull queues (stub transcode job)
+### Bull queues + ffmpeg worker ✅
 
 - [x] `@nestjs/bull` + `bull`; `REDIS_HOST`/`REDIS_PORT` in `.env` + Joi
 - [x] `BullModule.forRootAsync` (app.module) = Redis connection, config-driven (like Mongoose `forRootAsync`)
 - [x] `BullModule.registerQueue({ name: 'video-transcode' })` in VideoModule (like Mongoose `forFeature`)
-- [x] Producer: `VideoService` injects `@InjectQueue`, adds `{ video_id }` job on create — verified in container redis
-- [ ] Consumer: `@Processor('video-transcode')` flips `uploading → processing → ready` ← **now**
-- [ ] Verify: POST /videos → status ends `ready`; job leaves `:wait`
+- [x] Producer: upload completion changes `uploading → processing` and adds `{ video_id }`
+- [x] Consumer: `VideoProcessor` downloads the source, runs ffmpeg, uploads HLS + thumbnail,
+      and changes `processing → ready`; failures become `failed`
+- [x] Verified with a generated MP4 through MinIO → Bull → ffmpeg → HLS
 
 Redis conflict: brew `redis-server` owns 6379 (auto-starts, like `mongod`) → container remapped `6380:6379`.
 `import type { Queue } from 'bull'` — type-only import required under `isolatedModules` + decorated params.
 
-### Upload + transcode (Mux) ✅ — full loop proven end-to-end
+### Storage ✅
 
-Chose **Mux** (easier than Cloudflare Stream for learning). "Stripe for video."
+- [x] Generic `StorageService` using AWS S3 SDK commands and presigned PUT URLs
+- [x] Local MinIO in `docker-compose.yaml`; bucket creation on startup
+- [x] Configurable public object URLs and optional public bucket policy
+- [x] HLS objects use `master.m3u8` plus 360p / 720p / 1080p variant playlists
 
-- [x] `@mux/mux-node` SDK; `MUX_TOKEN_ID`/`MUX_TOKEN_SECRET` in `.env` + Joi (required),
-      `MUX_WEBHOOK_SECRET` optional (Mux gives it only when you create the webhook)
-- [x] `mux/mux.service.ts` — **vendor isolation**: all Mux calls behind one service, so the
-      future own-ffmpeg swap touches only this file. `create_direct_upload()`, `verify_and_parse_webhook()`
-- [x] Schema: `mux_upload_id` / `mux_asset_id` / `mux_playback_id` (the upload→asset→playback chain)
-- [x] `POST /videos/upload` → Mux direct-upload URL; client PUTs file **straight to Mux** (valet handoff)
-- [x] `POST /webhooks/mux` (`@Public`, signature-verified) — inbound async, mirror of the Bull job
-- [x] `rawBody: true` in main.ts — signature needs the original bytes (re-serialized JSON won't match)
-- [x] On `video.asset.ready` → save playback id + `hls_url`, flip `status: ready`;
-      on `video.asset.errored` → `failed`
-- [x] **Proven live:** upload sample.mp4 → Mux transcoded → webhook 200 (×4, verified) →
-      status ready → HLS manifest has 720p + 480p renditions (adaptive!). ngrok tunnel for local webhooks.
+### Flutter client + Phase 2 start ✅
 
-### Cleanup / next
-- [ ] Retire the old `POST /videos` + Bull stub processor (Mux does transcoding now)
-- [ ] Optional `GET /videos/:id/playback` (feed already carries `hls_url`)
-- [ ] ⚠️ ngrok-free URL changes each restart → update webhook URL in Mux dashboard
-- [ ] Flutter client (Codex, see `../videostream-mobile/CODEX_PROMPT.md`): login → feed → player → upload
+- [x] Flutter login → feed → HLS player → direct upload
+- [x] Direct PUT skips the JWT interceptor; upload completion starts backend processing
+- [x] Feed pagination with cursor-based infinite scroll and pull-to-refresh
+- [x] Backend and Flutter verification gates pass
+
+## Phase 2 — Product features
+
+- [x] Feed pagination + newest-first sorting
+- [x] Categories/tags: owner metadata update, ready-feed filters, and distinct lists
+- [x] Search: case-insensitive title, description, and tag search through `GET /videos?q=`
+- [x] Likes + view counts: idempotent per-user likes and playback-start counters
+- [x] Comments: create/list/delete; only the author can delete their comment
+- [x] Watch history: per-user/video progress upsert and newest-first history list
+- [x] Profiles + uploaded videos: public profile, own profile update, ready videos by owner
+- [x] Admin moderation: persisted user roles, video hide/unhide, user listing, and bans
+- [x] Rate limiting: global 100 requests/minute guard
+- [ ] Push notifications — requires Firebase Admin credentials plus mobile FCM token registration;
+      implement together with the mobile integration
+
+### Phase 2 backend API
+
+- `GET /videos?limit=&before=&category=&tag=&q=` — cursor page, filters, and search
+- `GET /videos/categories`, `GET /videos/tags`, `PATCH /videos/:id` — discovery metadata
+- `POST|DELETE /videos/:id/like`, `POST /videos/:id/views` — engagement
+- `GET|POST /videos/:id/comments`, `DELETE /comments/:id` — discussion
+- `POST /videos/:id/history`, `GET /users/me/history` — watch state
+- `GET /users/:id`, `GET /users/:id/videos`, `PATCH /users/me` — profiles
+- `GET /admin/videos`, `PATCH /admin/videos/:id/moderation`, `GET /admin/users`,
+  `PATCH /admin/users/:id/ban` — admin-only moderation
 
 ## Learned
 

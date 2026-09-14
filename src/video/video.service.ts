@@ -46,9 +46,24 @@ export class VideoService {
     return video
   }
 
-  async find_ready(limit = 20, before?: string) {
+  async find_ready(
+    limit = 20,
+    before?: string,
+    filters: { category?: string; tag?: string; q?: string } = {},
+  ) {
     const page_size = Math.min(Math.max(limit, 1), 50)
-    const filter: Record<string, unknown> = { status: VideoStatus.READY }
+    const filter: Record<string, any> = { status: VideoStatus.READY }
+
+    if (filters.category) filter.category = filters.category
+    if (filters.tag) filter.tags = filters.tag
+    if (filters.q) {
+      const escaped = filters.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      filter.$or = [
+        { title: { $regex: escaped, $options: 'i' } },
+        { description: { $regex: escaped, $options: 'i' } },
+        { tags: { $regex: escaped, $options: 'i' } },
+      ]
+    }
 
     if (before) {
       let cursor: { created_at: string; id: string }
@@ -65,10 +80,11 @@ export class VideoService {
       if (Number.isNaN(created_at.getTime())) {
         throw new BadRequestException('Invalid pagination cursor')
       }
-      filter.$or = [
+      const cursor_filter = [
         { created_at: { $lt: created_at } },
         { created_at, _id: { $lt: cursor.id } },
       ]
+      filter.$and = [...(filter.$and ?? []), { $or: cursor_filter }]
     }
 
     const videos = await this.video_model
@@ -94,15 +110,60 @@ export class VideoService {
     return this.video_model.findById(id)
   }
 
+  async update_metadata(video_id: string, owner_id: string, category?: string, tags?: string[]) {
+    return this.video_model.findOneAndUpdate(
+      { _id: video_id, owner_id },
+      {
+        ...(category !== undefined ? { category: category.trim().toLowerCase() || undefined } : {}),
+        ...(tags !== undefined
+          ? { tags: [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))] }
+          : {}),
+      },
+      { returnDocument: 'after' },
+    )
+  }
+
+  categories() {
+    return this.video_model.distinct('category', { status: VideoStatus.READY, category: { $ne: null } })
+  }
+
+  tags() {
+    return this.video_model.distinct('tags', { status: VideoStatus.READY })
+  }
+
+  increment_views(video_id: string) {
+    return this.video_model.findByIdAndUpdate(video_id, { $inc: { views_count: 1 } }, { returnDocument: 'after' })
+  }
+
+  increment_likes(video_id: string, amount: 1 | -1) {
+    return this.video_model.findByIdAndUpdate(video_id, { $inc: { likes_count: amount } }, { returnDocument: 'after' })
+  }
+
+  find_ready_by_owner(owner_id: string, limit = 20) {
+    return this.video_model.find({ owner_id, status: VideoStatus.READY }).sort({ created_at: -1 }).limit(limit)
+  }
+
+  list_for_moderation() {
+    return this.video_model.find().sort({ created_at: -1 }).limit(100)
+  }
+
+  moderate(video_id: string, hidden: boolean) {
+    return this.video_model.findByIdAndUpdate(
+      video_id,
+      { status: hidden ? VideoStatus.HIDDEN : VideoStatus.READY },
+      { returnDocument: 'after' },
+    )
+  }
+
   async mark_ready(video_id: string, hls_url: string, thumbnail_url: string) {
     return this.video_model.findByIdAndUpdate(video_id, {
       status: VideoStatus.READY,
       hls_url,
       thumbnail_url,
-    }, { new: true })
+    }, { returnDocument: 'after' })
   }
 
   async mark_failed(video_id: string) {
-    return this.video_model.findByIdAndUpdate(video_id, { status: VideoStatus.FAILED }, { new: true })
+    return this.video_model.findByIdAndUpdate(video_id, { status: VideoStatus.FAILED }, { returnDocument: 'after' })
   }
 }

@@ -3,4 +3,5 @@ export enum VideoStatus {
   PROCESSING = 'processing',
   READY = 'ready',
   FAILED = 'failed',
+  HIDDEN = 'hidden',
 }

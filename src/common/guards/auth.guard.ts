@@ -3,12 +3,14 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
 import { Request } from 'express'
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator'
+import { UserService } from '../../user/user.service'
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,6 +18,7 @@ export class AuthGuard implements CanActivate {
     private readonly jwt_service: JwtService,
     private readonly reflector: Reflector,
     private readonly config_service: ConfigService, // ← needed for the secret
+    private readonly user_service: UserService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,15 +41,19 @@ export class AuthGuard implements CanActivate {
 
     // 4. Verify signature + expiry with the SAME secret you signed with.
     //    verifyAsync throws if the token is tampered/expired — we catch and 401.
+    let payload: { sub: string }
     try {
-      const payload = await this.jwt_service.verifyAsync(token, {
+      payload = await this.jwt_service.verifyAsync(token, {
         secret: this.config_service.get<string>('JWT_SECRET'),
       })
-      // 5. Stash the payload on the request so controllers/decorators can read it.
-      request['user'] = payload
     } catch {
       throw new UnauthorizedException('Invalid token')
     }
+
+    const user = await this.user_service.find_by_id(payload.sub)
+    if (!user || user.is_banned) throw new ForbiddenException('Account is banned')
+    // 5. Stash the payload on the request so controllers/decorators can read it.
+    request['user'] = payload
 
     // 6. Passed every check → allow the request.
     return true

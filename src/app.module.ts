@@ -10,6 +10,12 @@ import * as Joi from 'joi';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bull'
 import { StorageModule } from './storage/storage.module'
+import { LikeModule } from './like/like.module'
+import { CommentModule } from './comment/comment.module'
+import { HistoryModule } from './history/history.module'
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
+import { APP_GUARD } from '@nestjs/core'
+import { AdminModule } from './admin/admin.module'
 
 
 @Module({
@@ -55,9 +61,14 @@ import { StorageModule } from './storage/storage.module'
     }),
     StorageModule,
     VideoModule,
+    LikeModule,
+    CommentModule,
+    HistoryModule,
+    AdminModule,
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 
 export class AppModule {}

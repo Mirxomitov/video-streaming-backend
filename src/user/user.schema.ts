@@ -15,6 +15,12 @@ export class User {
 
   @Prop()
   full_name?: string
+
+  @Prop({ type: String, enum: UserRole, default: UserRole.USER })
+  role!: UserRole
+
+  @Prop({ default: false })
+  is_banned!: boolean
 }
 
 export type UserDocument =  MongooseDocument<User>

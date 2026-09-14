@@ -27,4 +27,16 @@ export class UserService {
   async find_by_id(id: string) {
     return this.user_model.findById(id)
   }
+
+  async update_profile(id: string, full_name: string) {
+    return this.user_model.findByIdAndUpdate(id, { full_name: full_name.trim() }, { returnDocument: 'after' })
+  }
+
+  list_for_moderation() {
+    return this.user_model.find().sort({ created_at: -1 }).limit(100)
+  }
+
+  set_banned(id: string, is_banned: boolean) {
+    return this.user_model.findByIdAndUpdate(id, { is_banned }, { returnDocument: 'after' })
+  }
 }
