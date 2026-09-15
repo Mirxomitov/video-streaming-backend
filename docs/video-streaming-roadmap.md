@@ -147,3 +147,57 @@
 
 > When stuck, frame questions to colleagues around **these exact packages** — that's the
 > whole point of matching the stack.
+
+---
+
+## System Design Track (parallel learning path)
+
+Learn system design from the **practical backend/infrastructure direction**, not abstract
+interview diagrams. We already have Nginx, ports, MongoDB, Redis, WebSockets, S3-like storage
+under our belt — so we skip basic client-server theory and start at scaling.
+
+**Teaching pattern for every topic:**
+`Problem → naive solution → where it breaks → concept → improved architecture → trade-offs.`
+
+We evolve one running app (this videostream platform) as the example, introducing each piece
+only when a real bottleneck forces it — so every concept has a reason to exist.
+
+### Progression
+
+1. **Foundations** — client/server, DNS, HTTP/HTTPS, TCP, ports, reverse proxies,
+   vertical vs horizontal scaling. *(skim — mostly known)*
+2. **Data layer** — SQL vs NoSQL, indexes, replication, partitioning/sharding, transactions,
+   consistency.
+3. **Scaling** — load balancers, stateless servers, caching/Redis, CDNs, connection pooling.
+4. **Async systems** — queues, workers, events, Kafka/RabbitMQ/BullMQ, retries, idempotency.
+5. **Reliability** — timeouts, retries, circuit breakers, rate limiting, health checks, failover.
+6. **Distributed systems** — CAP theorem, consistency models, distributed locks, leader election.
+7. **Storage** — object storage/S3, databases, local disks, distributed file storage.
+8. **Real-time systems** — WebSockets, SSE, pub/sub, scaling WebSocket servers.
+9. **Production infrastructure** — Docker, Nginx, load balancers, multiple servers,
+   monitoring/logging.
+10. **Full system designs** — URL shortener → chat → notification service → file storage →
+    Zoom-like meeting platform → large educational platform.
+
+### Start here — Lesson 1: scale one Node.js server from 100 → 1,000,000 users
+
+```text
+Mobile App
+    ↓
+Node.js Server
+    ↓
+MongoDB
+```
+100 users: fine. 100,000 users: server overloaded. So:
+```text
+                    ┌─ Node Server 1
+Mobile → Nginx/LB ──┼─ Node Server 2
+                    └─ Node Server 3
+                          ↓
+                       MongoDB
+```
+New questions that ARE system design: how does the LB choose a server? What happens to JWT
+sessions? What about WebSockets? Is MongoDB now the bottleneck? What if Server 2 dies?
+
+Progressively introduce: Nginx → load balancing → Redis → queues → replicas → sharding →
+object storage → CDN → monitoring.

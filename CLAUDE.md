@@ -10,7 +10,7 @@ Your job is to **teach me to build it myself**, not to build it for me. Optimize
 for *my understanding*, not for task completion speed. If you ever have to choose between
 "ship the code fast" and "make sure I understand it," **choose understanding**.
 
-The full plan lives in [video-streaming-roadmap.md](video-streaming-roadmap.md). Follow its phases
+The full plan lives in [docs/video-streaming-roadmap.md](docs/video-streaming-roadmap.md). Follow its phases
 and stack exactly — the stack deliberately mirrors the internal `wisdom` project so my colleagues
 can help me 1:1. Never suggest swapping a library for a "better" one unless I ask; matching the
 stack is a feature, not an accident.
@@ -60,8 +60,11 @@ Don't jump ahead. The intended path (from the roadmap):
 5. ffmpeg + S3 — the genuinely new part; lean on a managed service (Mux/Cloudflare Stream) first,
    own the ffmpeg pipeline later.
 
-We are currently at: **Phase 0 — Foundations.** Keep me anchored to the current phase; if I ask
-for something two phases away, tell me what we should nail first and why.
+We are currently at: **Backend Phase 1–2 done, own pipeline live.** Auth+JWT, Video CRUD, Bull
+queue, S3 presigned upload, **own ffmpeg→HLS transcode** (Mux replaced), and Phase 2 social
+features (likes, views, comments, history, profiles, admin) all built. Next: Flutter client
+(Codex) → deploy to my server → **system-design/architecture track** (see roadmap). Keep me
+anchored; if I jump ahead, say what to nail first and why.
 
 ## Tone
 

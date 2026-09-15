@@ -161,6 +161,24 @@ Redis conflict: brew `redis-server` owns 6379 (auto-starts, like `mongod`) → c
 - `GET /admin/videos`, `PATCH /admin/videos/:id/moderation`, `GET /admin/users`,
   `PATCH /admin/users/:id/ban` — admin-only moderation
 
+## Pivot — own pipeline + Phase 2 (supersedes the Mux section above)
+
+Mux was the MVP scaffold. Replaced early with the **own pipeline** (roadmap "own it" goal met).
+
+- [x] **S3/R2 storage** (`storage/`): presigned PUT upload URL; client uploads straight to storage
+- [x] Upload flow: `POST /videos/upload` → presigned URL → client PUT → `POST /videos/:id/complete`
+      enqueues a **real Bull transcode job** (not a stub)
+- [x] **Own ffmpeg → HLS** worker (`video.processor.ts`): transcodes, writes HLS + thumbnail,
+      `mark_ready(hls_url, thumbnail_url)` / `mark_failed` — Mux + its webhook removed
+- [x] **Phase 2 social**: cursor pagination + search/filter (category/tag/q), likes (idempotent),
+      view counts, comments, watch history, public profiles, admin moderation + ban
+- [x] Full e2e suite green across all of the above
+
+### Next
+- [ ] Flutter client (Codex, backend source = contract) — closes the on-device loop
+- [ ] Deploy to my server (Docker, Nginx reverse proxy, real domain, env/secrets, process mgr)
+- [ ] **System-design/architecture track** (see `docs/video-streaming-roadmap.md`) on the live app
+
 ## Learned
 
 - Module = feature package; `imports` = other modules, `controllers`/`providers` = what this module owns.
