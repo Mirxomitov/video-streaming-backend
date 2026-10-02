@@ -218,6 +218,43 @@ Live on Oracle Always-Free ARM (Frankfurt), `http://141.147.7.83`.
 - Daily: containers `restart: unless-stopped` so they survive reboot
 
 ### Next (deploy hardening)
-- [ ] Domain → `141.147.7.83`, nginx TLS (certbot); move MinIO behind nginx, close 9000
-- [ ] Fix presigned-upload public host (so external clients can upload directly)
-- [ ] Mongo/MinIO auth + backups; basic monitoring/logs
+- [x] Domain → `141.147.7.83`, nginx TLS (certbot); move MinIO behind nginx, close 9000
+- [x] Fix presigned-upload public host (so external clients can upload directly)
+- [x] Mongo auth + backups  ·  [ ] MinIO already has root creds + unexposed  ·  [ ] basic monitoring/logs
+
+## TLS + CDN + hardening ✅ (2026-10-02)
+
+Domain `medic24.tj` (registrar aHOST, **DNS on Cloudflare**). Two subdomains, both
+A / grey-cloud (DNS-only) → `141.147.7.83`:
+
+| Host | Serves | nginx → |
+|------|--------|---------|
+| `stream.medic24.tj` | **API** | `api:3000` |
+| `cdn.medic24.tj` | **media / S3** (HLS playback + presigned uploads) | `minio:9000` |
+
+- **TLS:** Let's Encrypt SAN cert for both hosts via certbot **webroot** (nginx is a
+  container, so standalone mode can't own :80). HTTP→HTTPS redirect. certbot service
+  auto-renews every 12h; nginx reloads every 12h to pick up renewed certs.
+- **Why two hosts, not one:** API and the S3 bucket are both named `videos`, so a single
+  host collides (`/videos/*`). Can't rewrite the path either — an S3 SigV4 signature
+  covers the request path + Host, so a rewrite → `SignatureDoesNotMatch`. Separate host = clean.
+- **Presigned-upload fix:** `StorageService` now has a second **signing-only** S3 client
+  (`STORAGE_PUBLIC_ENDPOINT=https://cdn.medic24.tj`) used only for `create_upload_url`.
+  It never opens a socket (no container→public hairpin); URLs are signed against the public
+  host so external phones can PUT directly. Internal client still uses `minio:9000` for
+  server-side work.
+- **Closed:** MinIO `9000`/`9001` no longer published — reachable only via nginx/`cdn`.
+- **Mongo auth:** `mongod --auth`, app uses credentialed `MONGO_URI` (`authSource=admin`).
+  Admin user `vsadmin` created out-of-band (pw in server `.env` only). Mongo stays unpublished.
+- **Backups:** `backup.sh` (in repo) → daily cron 03:00 → `~/backups/`: `mongodump --archive --gzip`
+  + tar of the `videostream_minio-data` volume, 7-day retention.
+
+### Restore notes
+- Mongo: `docker exec -i videostream-mongo-1 mongorestore --archive --gzip --drop \
+  -u vsadmin -p <pw> --authenticationDatabase admin < ~/backups/mongo-<TS>.archive.gz`
+- MinIO: stop minio, `docker run --rm -v videostream_minio-data:/data -v ~/backups:/b alpine \
+  sh -c 'rm -rf /data/* && tar xzf /b/minio-<TS>.tar.gz -C /data'`, start minio
+
+### Still open (optional)
+- [ ] Remove the now-unused `9000` ingress rule from the OCI Security List (defense in depth)
+- [ ] Basic monitoring (uptime/log aggregation); Cloudflare proxy (orange-cloud) in front for CDN/DDoS
