@@ -2,6 +2,7 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    command: ["mongod", "--auth"]   # require authentication (admin user created out-of-band)
     volumes:
       - mongo-data:/data/db
     # internal only (not published) — reachable by api as mongo:27017
