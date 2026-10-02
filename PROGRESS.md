@@ -198,3 +198,26 @@ Mux was the MVP scaffold. Replaced early with the **own pipeline** (roadmap "own
 - Config in `main.ts` (`useGlobalPipes`) must come **before** `app.listen()`.
 - `expiresIn` wants a template-literal type (`'7d'`), not plain `string` — assert with `as SignOptions['expiresIn']` rather than hardcoding.
 - AuthN (401, *who are you*) vs AuthZ (403, *are you allowed*). JWT is **signed, not encrypted** — payload is public, never put secrets in it. Roles don't check ownership; the service must.
+
+## Deployed to production (Oracle Cloud) ✅
+
+Live on Oracle Always-Free ARM (Frankfurt), `http://141.147.7.83`.
+
+- [x] Server: Ubuntu 24.04 aarch64, 1 OCPU / 6 GB, static reserved IP, dedicated ssh key
+- [x] Two firewalls opened: host iptables + OCI Security List (22/80/443/9000)
+- [x] `Dockerfile` (multi-stage Node build + ffmpeg runtime), `.dockerignore`
+- [x] `docker-compose.prod.yaml`: api + mongo + redis + **minio** (S3) + nginx
+- [x] MinIO note: MinIO Inc. stopped publishing images (Oct 2025) → `alpine/minio` fork; run as root for volume perms
+- [x] **Full pipeline verified live:** login → presigned upload → ffmpeg → HLS (360/720/1080) → public playback
+- Known gaps / next: presigned-upload host = internal `minio:9000` (works via proxy/domain later);
+  9000 exposed publicly (temporary); no TLS yet; mongo/minio unauthenticated on internal net.
+
+### Deploy ops
+- Update: `rsync` source → `~/videostream`, then `docker compose -f docker-compose.prod.yaml up -d --build`
+- ⚠️ `docker compose restart` does NOT reload `.env` — use `up -d --force-recreate <svc>`
+- Daily: containers `restart: unless-stopped` so they survive reboot
+
+### Next (deploy hardening)
+- [ ] Domain → `141.147.7.83`, nginx TLS (certbot); move MinIO behind nginx, close 9000
+- [ ] Fix presigned-upload public host (so external clients can upload directly)
+- [ ] Mongo/MinIO auth + backups; basic monitoring/logs
