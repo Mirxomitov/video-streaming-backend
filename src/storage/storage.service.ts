@@ -16,7 +16,14 @@ import { dirname } from 'node:path'
 
 @Injectable()
 export class StorageService implements OnModuleInit {
+  // Internal client: talks to MinIO over the Docker network (minio:9000).
+  // Used for all server-side work — bucket setup, the transcode worker's up/downloads.
   private readonly client: S3Client
+  // Signing-only client: its endpoint is the PUBLIC host (https://stream.medic24.tj).
+  // Never opens a socket — getSignedUrl just computes a URL — so no container→public hairpin.
+  // Presigned upload URLs must be signed against the host the phone will actually PUT to,
+  // because the SigV4 signature covers the Host header.
+  private readonly signer: S3Client
   private readonly bucket: string
   private readonly public_base_url: string
   private readonly set_public_policy: boolean
@@ -26,14 +33,28 @@ export class StorageService implements OnModuleInit {
     this.public_base_url = this.config.getOrThrow<string>('STORAGE_PUBLIC_BASE_URL').replace(/\/$/, '')
     this.set_public_policy = this.config.get<boolean>('STORAGE_SET_PUBLIC_POLICY', true)
 
+    const region = this.config.get<string>('STORAGE_REGION', 'us-east-1')
+    const forcePathStyle = this.config.get<boolean>('STORAGE_FORCE_PATH_STYLE', true)
+    const credentials = {
+      accessKeyId: this.config.getOrThrow<string>('STORAGE_ACCESS_KEY_ID'),
+      secretAccessKey: this.config.getOrThrow<string>('STORAGE_SECRET_ACCESS_KEY'),
+    }
+
     this.client = new S3Client({
-      region: this.config.get<string>('STORAGE_REGION', 'us-east-1'),
+      region,
       endpoint: this.config.getOrThrow<string>('STORAGE_ENDPOINT'),
-      forcePathStyle: this.config.get<boolean>('STORAGE_FORCE_PATH_STYLE', true),
-      credentials: {
-        accessKeyId: this.config.getOrThrow<string>('STORAGE_ACCESS_KEY_ID'),
-        secretAccessKey: this.config.getOrThrow<string>('STORAGE_SECRET_ACCESS_KEY'),
-      },
+      forcePathStyle,
+      credentials,
+    })
+
+    // Falls back to the internal endpoint if no public endpoint is configured
+    // (e.g. local dev), so presigned URLs still work there.
+    this.signer = new S3Client({
+      region,
+      endpoint: this.config.get<string>('STORAGE_PUBLIC_ENDPOINT')
+        ?? this.config.getOrThrow<string>('STORAGE_ENDPOINT'),
+      forcePathStyle,
+      credentials,
     })
   }
 
@@ -71,7 +92,9 @@ export class StorageService implements OnModuleInit {
       ContentType: content_type,
     })
 
-    return getSignedUrl(this.client, command, { expiresIn: 15 * 60 })
+    // Sign with the public-host client so the URL points at stream.medic24.tj,
+    // reachable by external phones and matching the host MinIO validates behind nginx.
+    return getSignedUrl(this.signer, command, { expiresIn: 15 * 60 })
   }
 
   async download_to_file(key: string, file_path: string) {
