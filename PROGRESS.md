@@ -255,6 +255,26 @@ A / grey-cloud (DNS-only) → `141.147.7.83`:
 - MinIO: stop minio, `docker run --rm -v videostream_minio-data:/data -v ~/backups:/b alpine \
   sh -c 'rm -rf /data/* && tar xzf /b/minio-<TS>.tar.gz -C /data'`, start minio
 
-### Still open (optional)
-- [ ] Remove the now-unused `9000` ingress rule from the OCI Security List (defense in depth)
-- [ ] Basic monitoring (uptime/log aggregation); Cloudflare proxy (orange-cloud) in front for CDN/DDoS
+### Polish (done 2026-10-02)
+- [x] Removed the `9000` ingress rule from the OCI Security List — port now closed at both layers
+- [x] Monitoring: `monitor.sh` (in repo) → cron every 5 min → logs API/CDN/disk to `~/monitor.log`,
+  restarts `api` if `/health` != 200
+- [ ] (optional, later) Cloudflare proxy in front of `stream` only for CDN/DDoS — NOT on `cdn`
+  (free-plan 100 MB body cap would break large uploads)
+
+## Mobile client wired to live + E2E click-through (2026-10-03)
+
+`videostream-mobile` (Flutter, dio+bloc+auto_route+chewie) runs against the live backend.
+- Base URL defaults to `https://stream.medic24.tj` (override: `--dart-define=API_BASE_URL=...`).
+- Contract verified end to end: auth, feed (cursor), upload (presign→PUT→complete), likes,
+  views, history, comments — all match the backend routes.
+- `integration_test/app_test.dart`: drives the real app (OTP login → feed loads → HLS player
+  initializes) against live. Run interactively:
+  `flutter test integration_test/app_test.dart -d macos --dart-define=API_BASE_URL=https://stream.medic24.tj`
+  (Note: must run with the app window able to foreground — a headless/background run stalls on
+  macOS render throttling; the test itself is sound.)
+
+## ✅ Project complete — full path proven live
+phone upload → MinIO (S3) → Bull/ffmpeg transcode → adaptive HLS → HTTPS playback on the client.
+Backend path re-verified by curl (login → feed → playback 200) on 2026-10-03.
+Next chapter: the system-design track (see docs/video-streaming-roadmap.md).
